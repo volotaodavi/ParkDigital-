@@ -9,6 +9,7 @@ export async function consultarPlaca(placa: string): Promise<ConsultaPlacaResult
     .from(TICKETS_TABLE)
     .select('*')
     .eq('placa', placaNormalizada)
+    .eq('status', 'ATIVO')
     .order('data_expiracao', { ascending: false })
     .limit(1)
     .maybeSingle();

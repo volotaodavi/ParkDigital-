@@ -1,7 +1,9 @@
 import express, { Express, NextFunction, Request, Response } from 'express';
 import { env } from './config/env';
+import { iniciarTarefasCron } from './config/cronTasks';
 import driverRouter from './modules/driver/driver.routes';
 import fiscalRouter from './modules/fiscal/fiscal.routes';
+import webhookPaymentRouter from './modules/driver/webhookPayment';
 
 const app: Express = express();
 
@@ -13,6 +15,7 @@ app.get('/health', (_req: Request, res: Response) => {
 
 app.use('/api/v1/motorista', driverRouter);
 app.use('/api/v1/fiscal', fiscalRouter);
+app.use('/api/v1/payment', webhookPaymentRouter);
 
 app.use((_req: Request, res: Response) => {
   res.status(404).json({ status: 'ERRO', mensagem: 'Rota não encontrada.' });
@@ -25,6 +28,7 @@ app.use((error: Error, _req: Request, res: Response, _next: NextFunction) => {
 
 app.listen(env.port, () => {
   console.log(`ParkDigital API rodando na porta ${env.port}`);
+  iniciarTarefasCron();
 });
 
 export default app;

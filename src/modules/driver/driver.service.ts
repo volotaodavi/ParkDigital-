@@ -31,6 +31,9 @@ function gerarPixCopiaCola(valor: number, txid: string): string {
 export async function ativarVaga(dados: AtivarVagaRequestBody): Promise<AtivarVagaResultado> {
   const { placa, cpf, minutos } = dados;
 
+  // Timestamps provisórios: o webhook de pagamento os recalcula a partir do
+  // horário real da confirmação, para o motorista não perder minutos pagos
+  // enquanto o pagamento ainda está pendente.
   const dataAtivacao = new Date();
   const dataExpiracao = new Date(dataAtivacao.getTime() + minutos * 60_000);
 
@@ -40,6 +43,7 @@ export async function ativarVaga(dados: AtivarVagaRequestBody): Promise<AtivarVa
     minutos_contratados: minutos,
     data_ativacao: dataAtivacao.toISOString(),
     data_expiracao: dataExpiracao.toISOString(),
+    status: 'PENDENTE_PAGAMENTO' as const,
   };
 
   const { data, error } = await supabase
@@ -63,6 +67,7 @@ export async function ativarVaga(dados: AtivarVagaRequestBody): Promise<AtivarVa
       data_ativacao: ticket.data_ativacao,
       data_expiracao: ticket.data_expiracao,
       minutos_contratados: ticket.minutos_contratados,
+      status: ticket.status,
     },
     pagamento: {
       valor,

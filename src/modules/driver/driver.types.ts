@@ -1,3 +1,5 @@
+import { StatusTicket } from '../../types/ticket.types';
+
 export interface AtivarVagaRequestBody {
   placa: string;
   cpf: string;
@@ -11,6 +13,7 @@ export interface AtivarVagaResultado {
     data_ativacao: string;
     data_expiracao: string;
     minutos_contratados: number;
+    status: StatusTicket;
   };
   pagamento: {
     valor: number;
