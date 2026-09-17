@@ -1,0 +1,51 @@
+envVarGroups:
+  - name: parkdigital-config
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_KEY
+        sync: false
+      - key: JWT_SECRET
+        generateValue: true
+      - key: JWT_EXPIRES_IN
+        value: 8h
+      - key: PRECO_POR_MINUTO
+        value: "0.10"
+      - key: PIX_CHAVE
+        value: contato@parkdigital.com.br
+      - key: CORS_ORIGIN
+        sync: false
+
+services:
+  # API HTTP: rotas do motorista, fiscal, governo e autenticação.
+  - type: web
+    name: parkdigital-backend
+    env: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 3000
+      - fromGroup: parkdigital-config
+
+  # Worker de segundo plano: só o agendador node-cron dos alertas
+  # anti-multa. Roda isolado da API para não travar as rotas HTTP e para
+  # não disparar o mesmo alerta em duplicidade caso o serviço web escale
+  # para mais de uma réplica.
+  - type: worker
+    name: parkdigital-cron-alertas
+    env: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    dockerCommand: node dist/worker.js
+    plan: starter
+    autoDeploy: true
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - fromGroup: parkdigital-config

@@ -1,7 +1,6 @@
 import express, { Express, NextFunction, Request, Response } from 'express';
 import cors from 'cors';
 import { env } from './config/env';
-import { iniciarTarefasCron } from './config/cronTasks';
 import { authMiddleware, checkRole } from './config/authMiddleware';
 import authManagerRouter from './modules/auth/authManager';
 import ticketManagerRouter from './modules/driver/ticketManager';
@@ -47,7 +46,6 @@ app.use((error: Error, _req: Request, res: Response, _next: NextFunction) => {
 
 app.listen(env.port, () => {
   console.log(`ParkDigital API rodando na porta ${env.port}`);
-  iniciarTarefasCron();
 });
 
 export default app;
