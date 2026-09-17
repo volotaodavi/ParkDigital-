@@ -9,6 +9,7 @@ interface EnvConfig {
   precoPorMinuto: number;
   pixChave: string;
   jwtSecret: string;
+  jwtExpiresIn: string;
 }
 
 function required(name: string): string {
@@ -26,4 +27,5 @@ export const env: EnvConfig = {
   precoPorMinuto: Number(process.env.PRECO_POR_MINUTO ?? 0.1),
   pixChave: process.env.PIX_CHAVE ?? 'contato@parkdigital.com.br',
   jwtSecret: required('JWT_SECRET'),
+  jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? '8h',
 };

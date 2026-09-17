@@ -2,6 +2,7 @@ import express, { Express, NextFunction, Request, Response } from 'express';
 import { env } from './config/env';
 import { iniciarTarefasCron } from './config/cronTasks';
 import { authMiddleware, checkRole } from './config/authMiddleware';
+import authManagerRouter from './modules/auth/authManager';
 import ticketManagerRouter from './modules/driver/ticketManager';
 import webhookPaymentRouter from './modules/driver/webhookPayment';
 import plateScannerRouter from './modules/fiscal/plateScanner';
@@ -15,6 +16,9 @@ app.use(express.json());
 app.get('/health', (_req: Request, res: Response) => {
   res.status(200).json({ status: 'ONLINE', servico: 'ParkDigital API' });
 });
+
+// Autenticação: gera o token JWT usado pelas rotas protegidas (público)
+app.use('/api/v1/auth', authManagerRouter);
 
 // Motorista: ativação de vaga e confirmação de pagamento Pix (público)
 app.use('/api/v1/motorista', ticketManagerRouter);
