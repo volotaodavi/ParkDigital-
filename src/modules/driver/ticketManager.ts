@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto';
 import { Router, Request, Response } from 'express';
 import { supabase } from '../../config/database';
 import { env } from '../../config/env';
+import { whatsAppService } from '../../config/whatsappClient';
 import { TICKETS_TABLE, TicketZonaAzul } from '../../types/ticket.types';
 
 interface AtivarVagaRequestBody {
@@ -9,7 +10,10 @@ interface AtivarVagaRequestBody {
   cpf?: string;
   minutos?: number;
   setor?: string;
+  telefone?: string;
 }
+
+const TEMPLATE_CONFIRMACAO_PIX = 'confirmacao_ativacao_pix';
 
 /**
  * Gera um payload simulado no padrão Pix Copia e Cola (BR Code / EMV).
@@ -41,7 +45,7 @@ ticketManagerRouter.post(
   '/vaga/ativar',
   async (req: Request<unknown, unknown, AtivarVagaRequestBody>, res: Response): Promise<void> => {
     try {
-      const { placa, cpf, minutos, setor } = req.body;
+      const { placa, cpf, minutos, setor, telefone } = req.body;
 
       if (!placa || typeof placa !== 'string' || placa.trim().length === 0) {
         res.status(400).json({
@@ -75,6 +79,14 @@ ticketManagerRouter.post(
         return;
       }
 
+      if (telefone !== undefined && (typeof telefone !== 'string' || telefone.trim().length === 0)) {
+        res.status(400).json({
+          status: 'ERRO',
+          mensagem: 'Campo "telefone", se informado, deve ser uma string não vazia.',
+        });
+        return;
+      }
+
       // Timestamps provisórios: o webhook de pagamento os recalcula a partir
       // do horário real da confirmação, para o motorista não perder minutos
       // pagos enquanto o pagamento ainda está pendente.
@@ -91,6 +103,7 @@ ticketManagerRouter.post(
         status: 'PENDENTE_PAGAMENTO' as const,
         valor,
         setor: setor?.trim() || 'NAO_INFORMADO',
+        telefone: telefone?.trim() || null,
       };
 
       const { data, error } = await supabase.from(TICKETS_TABLE).insert(novoTicket).select().single();
@@ -101,6 +114,21 @@ ticketManagerRouter.post(
 
       const ticket = data as TicketZonaAzul;
       const pixCopiaECola = gerarPixCopiaCola(valor, ticket.id ?? randomUUID());
+
+      // Disparado em segundo plano: o motorista não deve esperar o WhatsApp
+      // (com suas próprias tentativas/retries) para receber a resposta com
+      // o código Pix. Falha no envio é só logada, nunca propagada aqui.
+      if (ticket.telefone) {
+        void whatsAppService.sendTemplateMessage(ticket.telefone, TEMPLATE_CONFIRMACAO_PIX, [
+          {
+            type: 'body',
+            parameters: [
+              { type: 'text', text: `R$ ${valor.toFixed(2).replace('.', ',')}` },
+              { type: 'text', text: pixCopiaECola },
+            ],
+          },
+        ]);
+      }
 
       res.status(201).json({
         status: 'SUCESSO',

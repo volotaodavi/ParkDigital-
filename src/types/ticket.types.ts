@@ -12,4 +12,5 @@ export interface TicketZonaAzul {
   status: StatusTicket;
   valor: number;
   setor: string;
+  telefone: string | null;
 }
