@@ -10,6 +10,7 @@ interface EnvConfig {
   pixChave: string;
   jwtSecret: string;
   jwtExpiresIn: string;
+  corsOrigin: string;
 }
 
 function required(name: string): string {
@@ -28,4 +29,5 @@ export const env: EnvConfig = {
   pixChave: process.env.PIX_CHAVE ?? 'contato@parkdigital.com.br',
   jwtSecret: required('JWT_SECRET'),
   jwtExpiresIn: process.env.JWT_EXPIRES_IN ?? '8h',
+  corsOrigin: process.env.CORS_ORIGIN ?? 'http://localhost:3000',
 };

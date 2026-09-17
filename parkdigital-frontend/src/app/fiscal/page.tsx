@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import {
+  AlertTriangle,
   Camera,
   CheckCircle2,
   Loader2,
@@ -12,54 +13,55 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { REGEX_PLACA, formatarPlaca } from "@/lib/formatters";
+import { API_BASE_URL } from "@/lib/api";
+import { obterTokenArmazenado } from "@/lib/auth";
 
 type ResultadoConsulta = { status: "REGULAR"; tempoRestanteMinutos: number } | { status: "IRREGULAR" };
 
 type EtapaInfracao = "oculto" | "formulario" | "enviando" | "enviado";
 
-function calcularHash(texto: string): number {
-  let hash = 0;
-  for (let indice = 0; indice < texto.length; indice += 1) {
-    hash = (hash * 31 + texto.charCodeAt(indice)) >>> 0;
-  }
-  return hash;
-}
-
-function consultarPlacaSimulado(placa: string): ResultadoConsulta {
-  const hash = calcularHash(placa);
-
-  if (hash % 2 === 0) {
-    return { status: "REGULAR", tempoRestanteMinutos: (hash % 58) + 1 };
-  }
-
-  return { status: "IRREGULAR" };
-}
-
 export default function TelaFiscal() {
   const [placa, setPlaca] = useState("");
   const [consultando, setConsultando] = useState(false);
   const [resultado, setResultado] = useState<ResultadoConsulta | null>(null);
+  const [erroConsulta, setErroConsulta] = useState<string | null>(null);
   const [etapaInfracao, setEtapaInfracao] = useState<EtapaInfracao>("oculto");
   const [rua, setRua] = useState("");
   const [observacao, setObservacao] = useState("");
   const [nomeArquivoFoto, setNomeArquivoFoto] = useState<string | null>(null);
+  const [erroInfracao, setErroInfracao] = useState<string | null>(null);
 
   const placaValida = REGEX_PLACA.test(placa);
 
-  function consultarPlaca() {
+  async function consultarPlaca() {
     if (!placaValida) {
       return;
     }
 
     setConsultando(true);
     setResultado(null);
+    setErroConsulta(null);
     setEtapaInfracao("oculto");
 
-    // Simula a chamada ao backend (GET /api/v1/fiscal/placa/consultar/:placa)
-    setTimeout(() => {
-      setResultado(consultarPlacaSimulado(placa));
+    try {
+      const resposta = await fetch(`${API_BASE_URL}/api/v1/fiscal/placa/consultar/${placa}`);
+      const dados = await resposta.json();
+
+      if (!resposta.ok) {
+        throw new Error(dados?.mensagem ?? "Não foi possível consultar a placa.");
+      }
+
+      setResultado(
+        dados.status === "REGULAR"
+          ? { status: "REGULAR", tempoRestanteMinutos: dados.tempo_restante_minutos }
+          : { status: "IRREGULAR" },
+      );
+    } catch (erro) {
+      console.error("[fiscal] Erro ao consultar placa:", erro);
+      setErroConsulta(erro instanceof Error ? erro.message : "Não foi possível consultar a placa.");
+    } finally {
       setConsultando(false);
-    }, 700);
+    }
   }
 
   function abrirFormularioInfracao() {
@@ -67,24 +69,54 @@ export default function TelaFiscal() {
     setRua("");
     setObservacao("");
     setNomeArquivoFoto(null);
+    setErroInfracao(null);
   }
 
-  function enviarInfracao() {
+  async function enviarInfracao() {
     if (!rua.trim() || !nomeArquivoFoto) {
       return;
     }
 
     setEtapaInfracao("enviando");
+    setErroInfracao(null);
 
-    // Simula a chamada ao backend (POST /api/v1/fiscal/infracao/emitir)
-    setTimeout(() => {
+    try {
+      const token = obterTokenArmazenado();
+
+      const resposta = await fetch(`${API_BASE_URL}/api/v1/fiscal/infracao/emitir`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          placa,
+          localizacao_rua: rua,
+          // TODO: enviar o arquivo de fato assim que existir um endpoint de
+          // upload (ex: Supabase Storage); por ora só o nome é capturado.
+          foto_comprovante_url: `pendente-upload://${nomeArquivoFoto}`,
+          observacao: observacao.trim() || undefined,
+        }),
+      });
+
+      const dados = await resposta.json();
+
+      if (!resposta.ok) {
+        throw new Error(dados?.mensagem ?? "Não foi possível emitir a infração.");
+      }
+
       setEtapaInfracao("enviado");
-    }, 900);
+    } catch (erro) {
+      console.error("[fiscal] Erro ao emitir infração:", erro);
+      setErroInfracao(erro instanceof Error ? erro.message : "Não foi possível emitir a infração.");
+      setEtapaInfracao("formulario");
+    }
   }
 
   function consultarOutraPlaca() {
     setPlaca("");
     setResultado(null);
+    setErroConsulta(null);
     setEtapaInfracao("oculto");
   }
 
@@ -133,6 +165,13 @@ export default function TelaFiscal() {
               </>
             )}
           </button>
+
+          {erroConsulta && (
+            <div className="mt-3 flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2.5 text-sm text-red-700">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{erroConsulta}</span>
+            </div>
+          )}
         </section>
 
         {resultado?.status === "REGULAR" && (
@@ -176,6 +215,13 @@ export default function TelaFiscal() {
         {(etapaInfracao === "formulario" || etapaInfracao === "enviando") && (
           <section className="flex flex-col gap-4 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <h2 className="font-semibold text-slate-900">Registrar infração — {placa}</h2>
+
+            {erroInfracao && (
+              <div className="flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2.5 text-sm text-red-700">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                <span>{erroInfracao}</span>
+              </div>
+            )}
 
             <div>
               <label htmlFor="rua" className="mb-1 block text-sm font-medium text-slate-700">

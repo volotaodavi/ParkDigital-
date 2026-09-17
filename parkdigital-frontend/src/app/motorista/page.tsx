@@ -1,10 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Car, Check, Clock, Copy, Loader2, QrCode } from "lucide-react";
+import { AlertTriangle, Car, Check, CheckCircle2, Clock, Copy, Loader2, QrCode } from "lucide-react";
 import { REGEX_PLACA, formatarCpf, formatarPlaca } from "@/lib/formatters";
+import { API_BASE_URL } from "@/lib/api";
 
-type Etapa = "formulario" | "processando" | "aguardando_pagamento";
+type Etapa = "formulario" | "processando" | "aguardando_pagamento" | "vaga_ativa";
 
 interface OpcaoTempo {
   minutos: number;
@@ -18,20 +19,7 @@ const OPCOES_TEMPO: OpcaoTempo[] = [
 ];
 
 const DURACAO_ESPERA_PAGAMENTO_SEGUNDOS = 10 * 60;
-
-function gerarCodigoPixSimulado(valor: number): string {
-  const identificador = Math.random().toString(36).slice(2, 10).toUpperCase();
-  const valorFormatado = valor.toFixed(2);
-
-  return (
-    "00020126580014BR.GOV.BCB.PIX0136parkdigital@municipio.gov.br" +
-    "5204000053039865" +
-    `54${valorFormatado.length.toString().padStart(2, "0")}${valorFormatado}` +
-    "5802BR5913PARKDIGITAL6009SAOPAULO" +
-    `62070503${identificador}` +
-    "6304FFFF"
-  );
-}
+const INTERVALO_POLLING_MS = 3000;
 
 function formatarTempo(segundosTotais: number): string {
   const minutos = Math.floor(segundosTotais / 60);
@@ -46,7 +34,11 @@ export default function TelaMotorista() {
   const [etapa, setEtapa] = useState<Etapa>("formulario");
   const [codigoPix, setCodigoPix] = useState("");
   const [codigoCopiado, setCodigoCopiado] = useState(false);
-  const [segundosRestantes, setSegundosRestantes] = useState(DURACAO_ESPERA_PAGAMENTO_SEGUNDOS);
+  const [segundosRestantesPagamento, setSegundosRestantesPagamento] = useState(
+    DURACAO_ESPERA_PAGAMENTO_SEGUNDOS,
+  );
+  const [segundosRestantesVaga, setSegundosRestantesVaga] = useState(0);
+  const [erro, setErro] = useState<string | null>(null);
 
   const opcaoSelecionada =
     OPCOES_TEMPO.find((opcao) => opcao.minutos === minutosSelecionados) ?? OPCOES_TEMPO[0];
@@ -55,31 +47,96 @@ export default function TelaMotorista() {
   const cpfValido = cpf.replace(/\D/g, "").length === 11;
   const formularioValido = placaValida && cpfValido;
 
+  // Cronômetro visual de espera pelo pagamento (não afeta o polling).
   useEffect(() => {
-    if (etapa !== "aguardando_pagamento" || segundosRestantes <= 0) {
+    if (etapa !== "aguardando_pagamento" || segundosRestantesPagamento <= 0) {
       return;
     }
 
     const intervalo = setInterval(() => {
-      setSegundosRestantes((atual) => Math.max(atual - 1, 0));
+      setSegundosRestantesPagamento((atual) => Math.max(atual - 1, 0));
     }, 1000);
 
     return () => clearInterval(intervalo);
-  }, [etapa, segundosRestantes]);
+  }, [etapa, segundosRestantesPagamento]);
 
-  function ativarVaga() {
+  // Polling do status do pagamento a cada 3s. O backend ainda não expõe um
+  // "consultar ticket por id", então reaproveitamos a consulta pública do
+  // fiscal por placa (GET /api/v1/fiscal/placa/consultar/:placa): ela só
+  // retorna REGULAR quando o ticket está com status ATIVO, ou seja, quando o
+  // webhook de pagamento já confirmou o Pix.
+  useEffect(() => {
+    if (etapa !== "aguardando_pagamento") {
+      return;
+    }
+
+    const intervalo = setInterval(async () => {
+      try {
+        const resposta = await fetch(`${API_BASE_URL}/api/v1/fiscal/placa/consultar/${placa}`);
+        const dados = await resposta.json();
+
+        if (resposta.ok && dados.status === "REGULAR") {
+          setSegundosRestantesVaga(Math.round(dados.tempo_restante_minutos * 60));
+          setEtapa("vaga_ativa");
+        }
+      } catch (erroConsulta) {
+        console.error("[motorista] Erro ao consultar status do pagamento:", erroConsulta);
+      }
+    }, INTERVALO_POLLING_MS);
+
+    return () => clearInterval(intervalo);
+  }, [etapa, placa]);
+
+  // Cronômetro oficial da vaga, uma vez confirmado o pagamento.
+  useEffect(() => {
+    if (etapa !== "vaga_ativa" || segundosRestantesVaga <= 0) {
+      return;
+    }
+
+    const intervalo = setInterval(() => {
+      setSegundosRestantesVaga((atual) => Math.max(atual - 1, 0));
+    }, 1000);
+
+    return () => clearInterval(intervalo);
+  }, [etapa, segundosRestantesVaga]);
+
+  async function ativarVaga() {
     if (!formularioValido) {
       return;
     }
 
     setEtapa("processando");
+    setErro(null);
 
-    // Simula a chamada ao backend (POST /api/v1/motorista/vaga/ativar)
-    setTimeout(() => {
-      setCodigoPix(gerarCodigoPixSimulado(opcaoSelecionada.valor));
-      setSegundosRestantes(DURACAO_ESPERA_PAGAMENTO_SEGUNDOS);
+    try {
+      const resposta = await fetch(`${API_BASE_URL}/api/v1/motorista/vaga/ativar`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          placa,
+          cpf: cpf.replace(/\D/g, ""),
+          minutos: minutosSelecionados,
+        }),
+      });
+
+      const dados = await resposta.json();
+
+      if (!resposta.ok) {
+        throw new Error(dados?.mensagem ?? "Não foi possível ativar a vaga.");
+      }
+
+      setCodigoPix(dados.pagamento.pix_copia_e_cola);
+      setSegundosRestantesPagamento(DURACAO_ESPERA_PAGAMENTO_SEGUNDOS);
       setEtapa("aguardando_pagamento");
-    }, 900);
+    } catch (erroAtivacao) {
+      console.error("[motorista] Erro ao ativar vaga:", erroAtivacao);
+      setErro(
+        erroAtivacao instanceof Error
+          ? erroAtivacao.message
+          : "Não foi possível ativar a vaga. Tente novamente.",
+      );
+      setEtapa("formulario");
+    }
   }
 
   async function copiarCodigoPix() {
@@ -87,8 +144,8 @@ export default function TelaMotorista() {
       await navigator.clipboard.writeText(codigoPix);
       setCodigoCopiado(true);
       setTimeout(() => setCodigoCopiado(false), 2000);
-    } catch (erro) {
-      console.error("Não foi possível copiar o código Pix:", erro);
+    } catch (erroCopia) {
+      console.error("Não foi possível copiar o código Pix:", erroCopia);
     }
   }
 
@@ -97,6 +154,7 @@ export default function TelaMotorista() {
     setPlaca("");
     setCpf("");
     setCodigoPix("");
+    setErro(null);
   }
 
   return (
@@ -112,9 +170,16 @@ export default function TelaMotorista() {
           </div>
         </header>
 
-        {etapa !== "aguardando_pagamento" && (
+        {etapa !== "aguardando_pagamento" && etapa !== "vaga_ativa" && (
           <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
             <div className="flex flex-col gap-4">
+              {erro && (
+                <div className="flex items-start gap-2 rounded-lg bg-red-50 px-3 py-2.5 text-sm text-red-700">
+                  <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                  <span>{erro}</span>
+                </div>
+              )}
+
               <div>
                 <label htmlFor="placa" className="mb-1 block text-sm font-medium text-slate-700">
                   Placa do veículo
@@ -237,8 +302,14 @@ export default function TelaMotorista() {
               <p className="text-xs uppercase tracking-wide text-slate-300">
                 Aguardando confirmação do pagamento
               </p>
-              <p className="font-mono text-3xl font-bold tabular-nums">{formatarTempo(segundosRestantes)}</p>
-              {segundosRestantes === 0 && (
+              <p className="font-mono text-3xl font-bold tabular-nums">
+                {formatarTempo(segundosRestantesPagamento)}
+              </p>
+              <p className="flex items-center gap-1.5 text-xs text-slate-400">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Verificando pagamento automaticamente a cada 3s
+              </p>
+              {segundosRestantesPagamento === 0 && (
                 <p className="text-xs text-amber-300">Tempo esgotado. Gere um novo código para continuar.</p>
               )}
             </div>
@@ -247,6 +318,33 @@ export default function TelaMotorista() {
               type="button"
               onClick={novaAtivacao}
               className="text-center text-sm font-medium text-blue-900 underline-offset-2 hover:underline"
+            >
+              Cancelar e ativar outra vaga
+            </button>
+          </section>
+        )}
+
+        {etapa === "vaga_ativa" && (
+          <section className="flex flex-col items-center gap-4 rounded-2xl border border-emerald-300 bg-emerald-50 p-6 text-center shadow-sm">
+            <CheckCircle2 className="h-12 w-12 text-emerald-600" />
+            <div>
+              <p className="text-lg font-bold text-emerald-800">Vaga ativa!</p>
+              <p className="text-sm text-emerald-700">
+                Placa {placa} · pagamento confirmado
+              </p>
+            </div>
+
+            <div className="flex w-full flex-col items-center gap-1 rounded-xl bg-emerald-600 px-4 py-4 text-white">
+              <p className="text-xs uppercase tracking-wide text-emerald-100">Tempo restante na vaga</p>
+              <p className="font-mono text-4xl font-bold tabular-nums">
+                {formatarTempo(segundosRestantesVaga)}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={novaAtivacao}
+              className="text-sm font-medium text-emerald-800 underline-offset-2 hover:underline"
             >
               Ativar outra vaga
             </button>

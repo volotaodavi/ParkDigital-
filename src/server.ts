@@ -1,4 +1,5 @@
 import express, { Express, NextFunction, Request, Response } from 'express';
+import cors from 'cors';
 import { env } from './config/env';
 import { iniciarTarefasCron } from './config/cronTasks';
 import { authMiddleware, checkRole } from './config/authMiddleware';
@@ -11,6 +12,9 @@ import dashboardFinanceiroRouter from './modules/governo/dashboardFinanceiro';
 
 const app: Express = express();
 
+// Necessário para o frontend Next.js (rodando em outra origem/porta) poder
+// chamar esta API diretamente do navegador.
+app.use(cors({ origin: env.corsOrigin }));
 app.use(express.json());
 
 app.get('/health', (_req: Request, res: Response) => {
