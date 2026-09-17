@@ -10,4 +10,6 @@ export interface TicketZonaAzul {
   data_ativacao: string;
   data_expiracao: string;
   status: StatusTicket;
+  valor: number;
+  setor: string;
 }

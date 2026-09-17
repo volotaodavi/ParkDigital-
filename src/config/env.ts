@@ -8,6 +8,7 @@ interface EnvConfig {
   supabaseKey: string;
   precoPorMinuto: number;
   pixChave: string;
+  jwtSecret: string;
 }
 
 function required(name: string): string {
@@ -24,4 +25,5 @@ export const env: EnvConfig = {
   supabaseKey: required('SUPABASE_KEY'),
   precoPorMinuto: Number(process.env.PRECO_POR_MINUTO ?? 0.1),
   pixChave: process.env.PIX_CHAVE ?? 'contato@parkdigital.com.br',
+  jwtSecret: required('JWT_SECRET'),
 };

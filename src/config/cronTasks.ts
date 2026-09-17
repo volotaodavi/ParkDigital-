@@ -1,5 +1,5 @@
 import cron from 'node-cron';
-import { supabase } from './supabaseClient';
+import { supabase } from './database';
 import { TICKETS_TABLE, TicketZonaAzul } from '../types/ticket.types';
 
 const JANELA_ALERTA_MINUTOS_MIN = 9;

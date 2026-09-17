@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { supabase } from '../../config/supabaseClient';
+import { supabase } from '../../config/database';
 import { TICKETS_TABLE, TicketZonaAzul } from '../../types/ticket.types';
 
 interface WebhookPagamentoBody {

@@ -1,9 +1,12 @@
 import express, { Express, NextFunction, Request, Response } from 'express';
 import { env } from './config/env';
 import { iniciarTarefasCron } from './config/cronTasks';
-import driverRouter from './modules/driver/driver.routes';
-import fiscalRouter from './modules/fiscal/fiscal.routes';
+import { authMiddleware, checkRole } from './config/authMiddleware';
+import ticketManagerRouter from './modules/driver/ticketManager';
 import webhookPaymentRouter from './modules/driver/webhookPayment';
+import plateScannerRouter from './modules/fiscal/plateScanner';
+import infractionManagerRouter from './modules/fiscal/infractionManager';
+import dashboardFinanceiroRouter from './modules/governo/dashboardFinanceiro';
 
 const app: Express = express();
 
@@ -13,9 +16,17 @@ app.get('/health', (_req: Request, res: Response) => {
   res.status(200).json({ status: 'ONLINE', servico: 'ParkDigital API' });
 });
 
-app.use('/api/v1/motorista', driverRouter);
-app.use('/api/v1/fiscal', fiscalRouter);
+// Motorista: ativação de vaga e confirmação de pagamento Pix (público)
+app.use('/api/v1/motorista', ticketManagerRouter);
 app.use('/api/v1/payment', webhookPaymentRouter);
+
+// Fiscal: consulta de placa é pública (uso em campo); emissão de infração
+// exige token JWT com role FISCAL
+app.use('/api/v1/fiscal', plateScannerRouter);
+app.use('/api/v1/fiscal/infracao', authMiddleware, checkRole(['FISCAL']), infractionManagerRouter);
+
+// Governo: auditoria financeira exige token JWT com role GESTOR_PUBLICO
+app.use('/api/v1/governo/auditoria', authMiddleware, checkRole(['GESTOR_PUBLICO']), dashboardFinanceiroRouter);
 
 app.use((_req: Request, res: Response) => {
   res.status(404).json({ status: 'ERRO', mensagem: 'Rota não encontrada.' });
