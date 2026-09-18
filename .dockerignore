@@ -1,0 +1,15 @@
+node_modules
+dist
+.git
+.env
+.env.*
+!.env.example
+npm-debug.log*
+
+# Este é um monorepo: o frontend Next.js tem seu próprio pipeline de deploy
+# (Vercel) e não deve entrar no contexto de build da imagem do backend.
+parkdigital-frontend
+
+*.md
+.github
+.vscode

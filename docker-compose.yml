@@ -1,0 +1,20 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: parkdigital-backend:local
+    ports:
+      # HOST_PORT é configurável porque a porta 3000 do host normalmente já
+      # está ocupada pelo `next dev` do frontend em desenvolvimento local.
+      - "${HOST_PORT:-3000}:${PORT:-3000}"
+    environment:
+      PORT: ${PORT:-3000}
+      SUPABASE_URL: ${SUPABASE_URL:?defina SUPABASE_URL no arquivo .env}
+      SUPABASE_KEY: ${SUPABASE_KEY:?defina SUPABASE_KEY no arquivo .env}
+      JWT_SECRET: ${JWT_SECRET:?defina JWT_SECRET no arquivo .env}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
+      PRECO_POR_MINUTO: ${PRECO_POR_MINUTO:-0.10}
+      PIX_CHAVE: ${PIX_CHAVE:-contato@parkdigital.com.br}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:3000}
+    restart: unless-stopped
