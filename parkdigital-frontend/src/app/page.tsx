@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Car, Landmark, ShieldCheck } from "lucide-react";
+import { Car, Landmark, Settings, ShieldCheck } from "lucide-react";
 
 export default function Home() {
   return (
@@ -32,6 +32,14 @@ export default function Home() {
         >
           <Landmark className="h-5 w-5" />
           <span className="font-medium">Sou gestor público</span>
+        </Link>
+
+        <Link
+          href="/admin"
+          className="flex items-center gap-3 rounded-xl border border-slate-300 bg-white px-5 py-4 text-slate-900 shadow-sm transition-colors hover:bg-slate-100"
+        >
+          <Settings className="h-5 w-5" />
+          <span className="font-medium">Sou administrador</span>
         </Link>
       </div>
     </main>

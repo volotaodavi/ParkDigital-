@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AlertTriangle, Banknote, Car, Landmark, MapPin, ShieldAlert, TrendingUp } from "lucide-react";
+import { AlertTriangle, Banknote, Car, Landmark, LogOut, MapPin, ShieldAlert, TrendingUp } from "lucide-react";
+import { RequireAuth } from "@/components/RequireAuth";
+import { useAuth } from "@/lib/AuthContext";
 
 interface SetorArrecadacao {
   setor: string;
@@ -62,6 +64,15 @@ function formatarMoeda(valor: number): string {
 }
 
 export default function DashboardGoverno() {
+  return (
+    <RequireAuth allowedRoles={["GESTOR_PUBLICO"]}>
+      <ConteudoDashboardGoverno />
+    </RequireAuth>
+  );
+}
+
+function ConteudoDashboardGoverno() {
+  const { sessao, logout } = useAuth();
   const [auditoria, setAuditoria] = useState<AuditoriaArrecadacao | null>(null);
   const [carregando, setCarregando] = useState(true);
 
@@ -91,10 +102,20 @@ export default function DashboardGoverno() {
           <div className="rounded-full bg-white/10 p-2.5">
             <Landmark className="h-7 w-7" />
           </div>
-          <div>
-            <p className="text-sm font-medium text-blue-100">ParkDigital · Painel do Gestor</p>
+          <div className="flex-1">
+            <p className="text-sm font-medium text-blue-100">
+              ParkDigital · Painel do Gestor{sessao ? ` · ${sessao.usuario.nome}` : ""}
+            </p>
             <h1 className="text-xl font-semibold">Auditoria de arrecadação da Zona Azul</h1>
           </div>
+          <button
+            type="button"
+            onClick={() => void logout()}
+            className="flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-white/20"
+          >
+            <LogOut className="h-4 w-4" />
+            Sair
+          </button>
         </header>
 
         {carregando || !auditoria ? (

@@ -6,6 +6,7 @@ import {
   Camera,
   CheckCircle2,
   Loader2,
+  LogOut,
   MapPin,
   Search,
   Send,
@@ -14,13 +15,24 @@ import {
 } from "lucide-react";
 import { REGEX_PLACA, formatarPlaca } from "@/lib/formatters";
 import { API_BASE_URL } from "@/lib/api";
-import { obterTokenArmazenado } from "@/lib/auth";
+import { fetchAutenticado, SessaoInvalidaError } from "@/lib/apiFetch";
+import { RequireAuth } from "@/components/RequireAuth";
+import { useAuth } from "@/lib/AuthContext";
 
 type ResultadoConsulta = { status: "REGULAR"; tempoRestanteMinutos: number } | { status: "IRREGULAR" };
 
 type EtapaInfracao = "oculto" | "formulario" | "enviando" | "enviado";
 
 export default function TelaFiscal() {
+  return (
+    <RequireAuth allowedRoles={["FISCAL"]}>
+      <ConteudoFiscal />
+    </RequireAuth>
+  );
+}
+
+function ConteudoFiscal() {
+  const { sessao, logout } = useAuth();
   const [placa, setPlaca] = useState("");
   const [consultando, setConsultando] = useState(false);
   const [resultado, setResultado] = useState<ResultadoConsulta | null>(null);
@@ -81,14 +93,9 @@ export default function TelaFiscal() {
     setErroInfracao(null);
 
     try {
-      const token = obterTokenArmazenado();
-
-      const resposta = await fetch(`${API_BASE_URL}/api/v1/fiscal/infracao/emitir`, {
+      const resposta = await fetchAutenticado("/api/v1/fiscal/infracao/emitir", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           placa,
           localizacao_rua: rua,
@@ -108,7 +115,13 @@ export default function TelaFiscal() {
       setEtapaInfracao("enviado");
     } catch (erro) {
       console.error("[fiscal] Erro ao emitir infração:", erro);
-      setErroInfracao(erro instanceof Error ? erro.message : "Não foi possível emitir a infração.");
+      setErroInfracao(
+        erro instanceof SessaoInvalidaError
+          ? "Sua sessão expirou. Faça login novamente."
+          : erro instanceof Error
+            ? erro.message
+            : "Não foi possível emitir a infração.",
+      );
       setEtapaInfracao("formulario");
     }
   }
@@ -127,10 +140,20 @@ export default function TelaFiscal() {
           <div className="rounded-full bg-white/10 p-2">
             <ShieldCheck className="h-6 w-6" />
           </div>
-          <div>
-            <p className="text-sm font-medium text-blue-100">ParkDigital · Fiscalização</p>
+          <div className="flex-1">
+            <p className="text-sm font-medium text-blue-100">
+              ParkDigital · Fiscalização{sessao ? ` · ${sessao.usuario.nome}` : ""}
+            </p>
             <h1 className="text-lg font-semibold">Consulta de regularidade</h1>
           </div>
+          <button
+            type="button"
+            onClick={() => void logout()}
+            className="flex items-center gap-1.5 rounded-lg bg-white/10 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-white/20"
+          >
+            <LogOut className="h-4 w-4" />
+            Sair
+          </button>
         </header>
 
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">

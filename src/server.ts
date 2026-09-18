@@ -11,6 +11,11 @@ import dashboardFinanceiroRouter from './modules/governo/dashboardFinanceiro';
 
 const app: Express = express();
 
+// O Render (e a maioria dos PaaS) coloca a API atrás de 1 proxy reverso;
+// sem isso, o rate limiter de login enxergaria o IP do proxy para todo
+// mundo, em vez do IP real de cada cliente.
+app.set('trust proxy', 1);
+
 // Necessário para o frontend Next.js (rodando em outra origem/porta) poder
 // chamar esta API diretamente do navegador.
 app.use(cors({ origin: env.corsOrigin }));
